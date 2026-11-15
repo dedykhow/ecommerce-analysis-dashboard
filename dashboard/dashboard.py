@@ -982,3 +982,159 @@ else:
     st.info("Belum ada data frekuensi transaksi untuk periode yang dipilih.")
 plt.close(fig)
 
+# ==========================================
+# 7. CONCLUSION & RECOMMENDATION
+# ==========================================
+
+st.divider()
+st.header("Conclusion & Recommendation")
+
+# ------------------------------------------
+# A. Menyusun kesimpulan secara dinamis
+# ------------------------------------------
+
+# Kesimpulan Q1: Tren Penjualan
+if not monthly_sales.empty:
+    conclusion_highest_month = monthly_sales.loc[
+        monthly_sales['total_sales'].idxmax()
+    ]
+    conclusion_lowest_month = monthly_sales.loc[
+        monthly_sales['total_sales'].idxmin()
+    ]
+
+    conclusion_q1 = (
+        f"Penjualan tertinggi terjadi pada "
+        f"**{format_month_label(conclusion_highest_month['month'])}** "
+        f"sebesar R$ {conclusion_highest_month['total_sales']:,.2f}, "
+        f"sedangkan penjualan terendah terjadi pada "
+        f"**{format_month_label(conclusion_lowest_month['month'])}** "
+        f"sebesar R$ {conclusion_lowest_month['total_sales']:,.2f}."
+    )
+else:
+    conclusion_q1 = (
+        "Tidak terdapat data penjualan pada periode yang dipilih."
+    )
+
+# Kesimpulan Q2: Kategori Produk
+if not category_sales.empty:
+    conclusion_top_category = category_sales.iloc[0]
+    conclusion_q2 = (
+        f"Kategori dengan nilai penjualan tertinggi adalah "
+        f"**{conclusion_top_category['product_category_name_english']}**, "
+        f"dengan kontribusi sebesar "
+        f"{conclusion_top_category['sales_percentage']:.2f}%."
+    )
+else:
+    conclusion_q2 = (
+        "Tidak terdapat data kategori produk yang dapat dianalisis "
+        "pada periode yang dipilih."
+    )
+
+# Kesimpulan Q3: Segmentasi Pelanggan
+if not rfm_df.empty and not segment_summary.empty:
+    conclusion_largest_segment = segment_summary.loc[
+        segment_summary['total_customers'].idxmax()
+    ]
+    conclusion_repeat_pct = (
+        (rfm_df['frequency'] > 1).sum() / len(rfm_df) * 100
+    )
+
+    conclusion_q3 = (
+        f"Analisis RFM mencakup **{len(rfm_df):,} pelanggan**. "
+        f"Segmen terbesar adalah "
+        f"**{conclusion_largest_segment['customer_segment']}** "
+        f"({conclusion_largest_segment['total_customers']:,} pelanggan atau "
+        f"{conclusion_largest_segment['total_customers'] / len(rfm_df) * 100:.2f}%). "
+        f"Pelanggan yang melakukan transaksi lebih dari satu kali "
+        f"mencakup {conclusion_repeat_pct:.2f}%."
+    )
+else:
+    conclusion_q3 = (
+        "Tidak terdapat data pelanggan yang dapat digunakan "
+        "untuk analisis RFM pada periode yang dipilih."
+    )
+
+st.markdown(
+    f"""
+Berdasarkan analisis data transaksi E-Commerce selama periode
+**{selected_start_date.strftime('%d %b %Y')} hingga
+{selected_end_date.strftime('%d %b %Y')}**, diperoleh kesimpulan berikut.
+
+**1. Tren Penjualan Bulanan**
+
+{conclusion_q1}
+
+**2. Kontribusi Penjualan Berdasarkan Kategori Produk**
+
+{conclusion_q2}
+
+**3. Segmentasi Pelanggan Berdasarkan RFM**
+
+{conclusion_q3}
+"""
+)
+
+# ------------------------------------------
+# B. Menyusun rekomendasi secara dinamis
+# ------------------------------------------
+
+if not category_sales.empty:
+    category_recommendation = (
+        f"Mempertahankan dan mengevaluasi strategi pada kategori "
+        f"**{category_sales.iloc[0]['product_category_name_english']}**, "
+        "yang memberikan kontribusi nilai penjualan terbesar "
+        "pada periode analisis."
+    )
+else:
+    category_recommendation = (
+        "Evaluasi kategori produk dapat dilakukan setelah tersedia "
+        "data kategori yang dapat dianalisis pada periode tersebut."
+    )
+
+if not rfm_df.empty:
+    high_value_inactive_count = int(
+        (rfm_df['customer_segment'] == 'Tidak Aktif - Bernilai Tinggi').sum()
+    )
+    inactive_total_count = int(
+        rfm_df['customer_segment'].isin(
+            ['Tidak Aktif', 'Tidak Aktif - Bernilai Tinggi']
+        ).sum()
+    )
+
+    retention_recommendation = (
+        "Memprioritaskan evaluasi strategi retensi dan reaktivasi, "
+        f"terutama terhadap **{high_value_inactive_count:,} pelanggan** "
+        "pada segmen **Tidak Aktif - Bernilai Tinggi**. "
+        f"Secara keseluruhan, dua segmen Tidak Aktif mencakup "
+        f"**{inactive_total_count:,} pelanggan**."
+    )
+else:
+    retention_recommendation = (
+        "Evaluasi retensi pelanggan dapat dilakukan setelah tersedia "
+        "data pelanggan untuk analisis RFM."
+    )
+
+st.markdown(
+    f"""
+### Recommendation
+
+Berdasarkan hasil analisis pada periode yang dipilih, beberapa
+rekomendasi yang dapat dipertimbangkan:
+
+**1. Optimalisasi Penjualan**
+
+Memantau perubahan penjualan bulanan dan mengevaluasi bulan dengan
+penjualan tertinggi maupun terendah untuk memahami pola permintaan.
+
+**2. Optimalisasi Kategori Produk**
+
+{category_recommendation}
+
+**3. Peningkatan Retensi Pelanggan**
+
+{retention_recommendation}
+
+Rekomendasi ini merupakan arah evaluasi berdasarkan data historis,
+bukan kepastian penyebab atau jaminan hasil bisnis.
+"""
+)
