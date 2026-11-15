@@ -79,20 +79,6 @@ except Exception as e:
 
 
 
-# ==========================================
-# 3. ANALISIS TREN PENJUALAN
-# ==========================================
-
-st.divider()
-
-st.header("Pertanyaan 1: Tren Penjualan")
-
-st.subheader("Bagaimana Perkembangan Tren Penjualan Bulanan?")
-
-st.markdown("""
-Visualisasi ini menampilkan perkembangan nilai penjualan bulanan selama Januari 2017 hingga Agustus 2018. Nilai penjualan dihitung berdasarkan total harga produk (`price`) dari pesanan berstatus delivered, tanpa memasukkan biaya pengiriman.
-""")
-
 # Mengubah kolom tanggal menjadi datetime
 orders_df['order_purchase_timestamp'] = pd.to_datetime(
     orders_df['order_purchase_timestamp'],
@@ -106,6 +92,122 @@ delivered_orders = orders_df[
     (orders_df['order_delivered_customer_date'].notna())
 ].copy()
 
+
+# ==========================================
+# 2A. FILTER RENTANG TANGGAL ANALISIS
+# ==========================================
+
+# Batas tanggal diambil dari transaksi delivered yang valid.
+min_date = delivered_orders['order_purchase_timestamp'].min().date()
+max_date = delivered_orders['order_purchase_timestamp'].max().date()
+
+# Ambil periode terakhir yang sudah diproses dari URL.
+# Jika belum ada, gunakan seluruh rentang tanggal dataset.
+def get_query_date(param_name, default_date):
+    try:
+        query_value = st.query_params.get(param_name)
+        if query_value:
+            parsed_date = pd.to_datetime(query_value, format="%Y-%m-%d").date()
+            if min_date <= parsed_date <= max_date:
+                return parsed_date
+    except (ValueError, TypeError):
+        pass
+
+    return default_date
+
+
+default_start_date = get_query_date("start_date", min_date)
+default_end_date = get_query_date("end_date", max_date)
+
+st.subheader("Periode Analisis")
+
+with st.form("date_filter_form"):
+    date_col1, date_col2 = st.columns(2)
+
+    with date_col1:
+        input_start_date = st.date_input(
+            "Tanggal Awal",
+            value=default_start_date,
+            min_value=min_date,
+            max_value=max_date,
+            format="DD/MM/YYYY",
+            key="filter_start_date"
+        )
+
+    with date_col2:
+        input_end_date = st.date_input(
+            "Tanggal Akhir",
+            value=default_end_date,
+            min_value=min_date,
+            max_value=max_date,
+            format="DD/MM/YYYY",
+            key="filter_end_date"
+        )
+
+    process_filter = st.form_submit_button(
+        "Proses Analisis",
+        type="primary",
+        use_container_width=True
+    )
+
+# Terapkan periode hanya ketika tombol ditekan.
+# Pada pemuatan pertama, gunakan periode yang tersimpan di URL
+# atau seluruh rentang data jika URL belum memiliki parameter.
+if "applied_start_date" not in st.session_state:
+    st.session_state.applied_start_date = default_start_date
+
+if "applied_end_date" not in st.session_state:
+    st.session_state.applied_end_date = default_end_date
+
+if process_filter:
+    if input_start_date > input_end_date:
+        st.error("Tanggal awal tidak boleh melewati tanggal akhir.")
+    else:
+        st.session_state.applied_start_date = input_start_date
+        st.session_state.applied_end_date = input_end_date
+
+        # Simpan periode yang sudah diproses ke URL agar tetap
+        # tersedia ketika halaman di-refresh atau dibuka kembali.
+        st.query_params["start_date"] = input_start_date.isoformat()
+        st.query_params["end_date"] = input_end_date.isoformat()
+
+selected_start_date = st.session_state.applied_start_date
+selected_end_date = st.session_state.applied_end_date
+
+# Batas akhir dibuat eksklusif agar seluruh transaksi pada
+# tanggal akhir pilihan tetap ikut dihitung.
+period_start = pd.Timestamp(selected_start_date)
+period_end_exclusive = pd.Timestamp(selected_end_date) + pd.Timedelta(days=1)
+
+st.caption(
+    f"Periode aktif: **{selected_start_date.strftime('%d %b %y')} "
+    f"- {selected_end_date.strftime('%d %b %y')}**"
+)
+st.caption(
+    f"Rentang data tersedia: {min_date.strftime('%d %b %y')} "
+    f"s.d. {max_date.strftime('%d %b %y')}"
+)
+
+# ==========================================
+# 3. ANALISIS TREN PENJUALAN
+# ==========================================
+
+st.divider()
+
+st.header("Pertanyaan 1: Tren Penjualan")
+
+st.subheader("Bagaimana Perkembangan Tren Penjualan Bulanan?")
+
+st.markdown(
+    f"""
+Visualisasi ini menampilkan perkembangan nilai penjualan bulanan selama
+**{selected_start_date.strftime('%d %b %y')} hingga
+{selected_end_date.strftime('%d %b %y')}**. Nilai penjualan dihitung berdasarkan
+total harga produk (`price`) dari pesanan berstatus delivered, tanpa memasukkan
+biaya pengiriman.
+"""
+)
+
 # Menggabungkan data pesanan dengan item transaksi
 sales_df = delivered_orders[
     ['order_id', 'order_purchase_timestamp']
@@ -115,12 +217,10 @@ sales_df = delivered_orders[
     how='inner'
 )
 
-# Filter periode Januari 2017 - Agustus 2018
+# Filter berdasarkan periode yang dipilih dan sudah diproses pengguna
 sales_df = sales_df[
-    sales_df['order_purchase_timestamp'].between(
-        '2017-01-01',
-        '2018-08-31 23:59:59'
-    )
+    (sales_df['order_purchase_timestamp'] >= period_start) &
+    (sales_df['order_purchase_timestamp'] < period_end_exclusive)
 ].copy()
 
 # Menghitung penjualan bulanan
@@ -167,7 +267,9 @@ ax.plot(
 )
 
 ax.set_title(
-    "Tren Penjualan Bulanan (Januari 2017 - Agustus 2018)"
+    f"Tren Penjualan Bulanan "
+    f"({selected_start_date.strftime('%d %b %y')} - "
+    f"{selected_end_date.strftime('%d %b %y')})"
 )
 ax.set_xlabel("Bulan")
 ax.set_ylabel("Total Penjualan (Juta R$)")
@@ -179,16 +281,67 @@ st.pyplot(fig, width="content")
 
 st.markdown("#### Explanatory Analysis")
 
-st.markdown("""
-Berdasarkan grafik, nilai penjualan menunjukkan kecenderungan meningkat selama periode Januari 2017 hingga Agustus 2018, meskipun terdapat beberapa fluktuasi bulanan.
+if monthly_sales.empty:
+    st.info(
+        "Tidak terdapat transaksi delivered pada periode yang dipilih, "
+        "sehingga tren penjualan bulanan belum dapat dianalisis."
+    )
+else:
+    highest_month = monthly_sales.loc[monthly_sales['total_sales'].idxmax()]
+    lowest_month = monthly_sales.loc[monthly_sales['total_sales'].idxmin()]
+    first_month = monthly_sales.iloc[0]
+    last_month = monthly_sales.iloc[-1]
 
-- Penjualan terendah terjadi pada Januari 2017 sebesar R$ 111.798,36.
-- Penjualan tertinggi terjadi pada November 2017 sebesar R$ 987.648,07.
-- Setelah mencapai puncak pada November 2017, penjualan mengalami penurunan pada Desember 2017, kemudian kembali meningkat pada awal 2018.
-- Pada periode Maret hingga Mei 2018, penjualan relatif stabil di kisaran R$950 ribu hingga R$ 980 ribu per bulan.
+    average_monthly_sales = monthly_sales['total_sales'].mean()
 
-Secara keseluruhan, nilai penjualan pada Agustus 2018 mencapai R$838.576,64 atau sekitar 7,5 kali dibandingkan Januari 2017. Hal ini menunjukkan perkembangan nilai penjualan yang positif selama periode analisis.
-""")
+    # Ubah label bulan YYYY-MM menjadi nama bulan berbahasa Indonesia.
+    month_names = {
+        1: "Januari", 2: "Februari", 3: "Maret", 4: "April",
+        5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus",
+        9: "September", 10: "Oktober", 11: "November", 12: "Desember"
+    }
+
+    def format_month_label(month_value):
+        month_date = pd.to_datetime(f"{month_value}-01")
+        return f"{month_names[month_date.month]} {month_date.year}"
+
+    highest_month_label = format_month_label(highest_month['month'])
+    lowest_month_label = format_month_label(lowest_month['month'])
+    first_month_label = format_month_label(first_month['month'])
+    last_month_label = format_month_label(last_month['month'])
+
+    if first_month['total_sales'] != 0:
+        period_change_pct = (
+            (last_month['total_sales'] - first_month['total_sales'])
+            / first_month['total_sales'] * 100
+        )
+        period_change_text = (
+            f"Penjualan pada bulan terakhir **{last_month_label}** "
+            f"{'meningkat' if period_change_pct >= 0 else 'menurun'} "
+            f"{abs(period_change_pct):.2f}% dibandingkan bulan pertama "
+            f"**{first_month_label}**."
+        )
+    else:
+        period_change_text = (
+            "Perbandingan persentase antara bulan pertama dan terakhir "
+            "tidak dapat dihitung karena nilai penjualan bulan pertama nol."
+        )
+
+    st.markdown(
+        f"""
+Berdasarkan transaksi pada periode **{selected_start_date.strftime('%d %b %y')}
+hingga {selected_end_date.strftime('%d %b %y')}**, berikut ringkasan
+perkembangan penjualan:
+
+- **Rata-rata penjualan bulanan:** R$ {average_monthly_sales:,.2f}.
+- **Penjualan tertinggi:** terjadi pada **{highest_month_label}**
+  sebesar R$ {highest_month['total_sales']:,.2f}.
+- **Penjualan terendah:** terjadi pada **{lowest_month_label}**
+  sebesar R$ {lowest_month['total_sales']:,.2f}.
+
+{period_change_text}
+"""
+    )
 
 plt.close(fig)
 
@@ -204,16 +357,19 @@ st.header("Pertanyaan 2: Kategori Produk")
 
 st.subheader("Kategori Produk Apa yang Memberikan Kontribusi Nilai Penjualan Terbesar?")
 
-st.markdown("""
-Visualisasi ini menampilkan 10 kategori produk dengan nilai penjualan tertinggi selama Januari 2017 hingga Agustus 2018. Nilai penjualan dihitung berdasarkan total harga produk (`price`), tanpa memasukkan biaya pengiriman.
-""")
+st.markdown(
+    f"""
+Visualisasi ini menampilkan 10 kategori produk dengan nilai penjualan tertinggi
+selama **{selected_start_date.strftime('%d %b %y')} hingga
+{selected_end_date.strftime('%d %b %y')}**. Nilai penjualan dihitung berdasarkan
+total harga produk (`price`), tanpa memasukkan biaya pengiriman.
+"""
+)
 
-# Mengambil pesanan dalam periode analisis
+# Mengambil pesanan sesuai periode yang dipilih pengguna
 orders_category = delivered_orders[
-    delivered_orders['order_purchase_timestamp'].between(
-        '2017-01-01',
-        '2018-08-31 23:59:59'
-    )
+    (delivered_orders['order_purchase_timestamp'] >= period_start) &
+    (delivered_orders['order_purchase_timestamp'] < period_end_exclusive)
 ][['order_id']].copy()
 
 # Menggabungkan transaksi dengan informasi kategori produk
@@ -284,9 +440,11 @@ top_categories_plot['sales_million'] = (
     top_categories_plot['total_sales'] / 1_000_000
 )
 
-# Warna khusus untuk kategori tertinggi
+# Warna khusus untuk kategori tertinggi pada periode terpilih
+highest_category = category_sales.iloc[0]['product_category_name_english']
+
 colors = [
-    '#F4A261' if category == 'health_beauty' else '#A9B9C9'
+    '#F4A261' if category == highest_category else '#A9B9C9'
     for category in top_categories_plot[
         'product_category_name_english'
     ]
@@ -307,7 +465,9 @@ ax.bar_label(
 )
 
 ax.set_title(
-    "10 Kategori Produk dengan Nilai Penjualan Tertinggi"
+    f"10 Kategori Produk dengan Nilai Penjualan Tertinggi "
+    f"({selected_start_date.strftime('%d %b %y')} - "
+    f"{selected_end_date.strftime('%d %b %y')})"
 )
 ax.set_xlabel("Total Penjualan (Juta R$)")
 ax.set_ylabel("Kategori Produk")
@@ -324,18 +484,60 @@ plt.tight_layout()
 st.pyplot(fig, width="content")
 st.markdown("#### Explanatory Analysis")
 
-st.markdown("""
-Berdasarkan grafik, kategori `health_beauty` memberikan kontribusi nilai penjualan terbesar selama periode Januari 2017 hingga Agustus 2018.
+# Menyusun penjelasan berdasarkan hasil perhitungan periode terpilih.
+if category_sales.empty:
+    st.info(
+        "Tidak terdapat data kategori produk yang dapat dianalisis "
+        "pada periode yang dipilih."
+    )
+else:
+    top_three = category_sales.head(3)
+    top_three_lines = []
 
-- Kategori `health_beauty` menempati posisi pertama dengan nilai penjualan sebesar R$ 1.229.557,50 atau sekitar 9,46% dari total penjualan kategori yang memiliki informasi kategori.
-- Posisi kedua ditempati `watches_gifts` dengan nilai penjualan R$ 1.163.187,91 atau sekitar 8,94%.
-- Posisi ketiga ditempati `bed_bath_table` dengan nilai penjualan R$ 1.022.955,77 atau sekitar 7,87%.
-- Menariknya, `bed_bath_table` memiliki jumlah item terjual terbanyak di antara 10 kategori teratas, yaitu 10.945 item, tetapi nilai penjualannya berada di posisi ketiga.
+    for rank, (_, row) in enumerate(top_three.iterrows(), start=1):
+        top_three_lines.append(
+            f"{rank}. **{row['product_category_name_english']}** — "
+            f"kontribusi {row['sales_percentage']:.2f}% "
+            f"dengan {int(row['total_items']):,} item terjual."
+        )
 
-Temuan ini menunjukkan bahwa kategori dengan jumlah item terjual terbanyak belum tentu menghasilkan nilai penjualan terbesar. Kontribusi nilai penjualan juga dipengaruhi oleh harga produk yang terjual.
+    highest_item_category = category_sales.loc[
+        category_sales['total_items'].idxmax()
+    ]
+    highest_sales_category = category_sales.iloc[0]
 
-Perhitungan persentase menggunakan total penjualan dari item transaksi yang memiliki informasi kategori produk dalam bahasa Inggris. Sebanyak 1.557 item transaksi tidak disertakan dalam perhitungan kategori karena informasi kategori dalam bahasa Inggris tidak tersedia.
-""")
+    if (
+        highest_item_category['product_category_name_english']
+        == highest_sales_category['product_category_name_english']
+    ):
+        item_insight = (
+            f"Kategori **{highest_item_category['product_category_name_english']}** "
+            f"menjadi kategori dengan jumlah item terjual terbanyak sekaligus "
+            f"nilai penjualan tertinggi, yaitu "
+            f"{int(highest_item_category['total_items']):,} item."
+        )
+    else:
+        item_insight = (
+            f"Kategori dengan jumlah item terjual terbanyak adalah "
+            f"**{highest_item_category['product_category_name_english']}**, "
+            f"sebanyak {int(highest_item_category['total_items']):,} item. "
+            f"Kategori ini berbeda dari kategori dengan nilai penjualan tertinggi, "
+            f"yaitu **{highest_sales_category['product_category_name_english']}**. "
+            f"Hal ini menunjukkan bahwa jumlah item terjual yang lebih banyak "
+            f"tidak selalu menghasilkan nilai penjualan terbesar."
+        )
+
+    st.markdown(
+        f"""
+Berdasarkan transaksi pada periode **{selected_start_date.strftime('%d %b %y')}
+hingga {selected_end_date.strftime('%d %b %y')}**, tiga kategori dengan
+kontribusi nilai penjualan terbesar adalah:
+
+{chr(10).join(top_three_lines)}
+
+{item_insight}
+"""
+    )
 plt.close(fig)
 
 
@@ -350,16 +552,56 @@ st.header("Pertanyaan 3: Segmentasi Pelanggan")
 
 st.subheader("Bagaimana Karakteristik Pelanggan Berdasarkan Recency, Frequency, dan Monetary?")
 
-st.markdown("""
-Visualisasi ini menampilkan distribusi pelanggan berdasarkan hasil segmentasi RFM selama periode Januari 2017 hingga Agustus 2018. Segmentasi dilakukan menggunakan nilai Recency, Frequency, dan Monetary dari transaksi berstatus delivered.
-""")
+st.markdown(
+    f"""
+Visualisasi ini menampilkan distribusi pelanggan berdasarkan hasil segmentasi
+RFM selama periode **{selected_start_date.strftime('%d %b %y')} hingga
+{selected_end_date.strftime('%d %b %y')}**. Segmentasi dilakukan menggunakan
+nilai Recency, Frequency, dan Monetary dari transaksi berstatus delivered.
+"""
+)
 
-# Mengambil pesanan delivered pada periode analisis
-rfm_orders = delivered_orders[
-    delivered_orders['order_purchase_timestamp'].between(
-        '2017-01-01',
-        '2018-08-31 23:59:59'
+# Pilihan batas dasar Recency untuk segmentasi pelanggan
+if "applied_recency_weeks" not in st.session_state:
+    st.session_state.applied_recency_weeks = 4
+
+with st.form("recency_parameter_form"):
+    selected_recency_weeks = st.selectbox(
+        "Pilih batas dasar Recency",
+        options=[1, 2, 3, 4, 6],
+        index=3,
+        format_func=lambda weeks: f"{weeks} minggu",
+        help="Pilihan ini menentukan batas waktu Recency untuk pemberian skor pelanggan."
     )
+
+    apply_recency = st.form_submit_button(
+        "Terapkan Pengaturan Recency",
+        type="primary"
+    )
+
+if apply_recency:
+    st.session_state.applied_recency_weeks = selected_recency_weeks
+
+recency_base_days = st.session_state.applied_recency_weeks * 7
+
+st.markdown(
+    """
+**Apa itu Recency?**
+
+Recency adalah jarak waktu sejak pelanggan terakhir kali melakukan transaksi.
+Semakin baru transaksi terakhir pelanggan, semakin kecil nilai Recency-nya.
+"""
+)
+
+st.caption(
+    "Semakin kecil nilai Recency, semakin tinggi skor yang diperoleh. "
+    "Pelanggan yang lebih baru bertransaksi mendapatkan skor lebih baik."
+)
+
+# Mengambil pesanan delivered sesuai periode yang dipilih pengguna
+rfm_orders = delivered_orders[
+    (delivered_orders['order_purchase_timestamp'] >= period_start) &
+    (delivered_orders['order_purchase_timestamp'] < period_end_exclusive)
 ][['order_id', 'customer_id', 'order_purchase_timestamp']].copy()
 
 # Menghubungkan pesanan dengan identitas pelanggan
@@ -377,7 +619,8 @@ rfm_data = rfm_data.merge(
 )
 
 # Tanggal acuan analisis
-reference_date = pd.Timestamp('2018-08-30')
+# Tanggal acuan adalah satu hari setelah tanggal akhir periode terpilih
+reference_date = period_end_exclusive
 
 # Menghitung Recency, Frequency, dan Monetary
 rfm_df = (
@@ -398,13 +641,13 @@ rfm_df['recency'] = (
 # MEMBERIKAN SKOR RFM
 # ==========================================
 
-# Skor Recency
+# Skor Recency berdasarkan pilihan batas dasar dalam satuan minggu
 rfm_df['R_score'] = np.select(
     [
-        rfm_df['recency'] <= 30,
-        rfm_df['recency'] <= 60,
-        rfm_df['recency'] <= 90,
-        rfm_df['recency'] <= 180
+        rfm_df['recency'] <= recency_base_days,
+        rfm_df['recency'] <= recency_base_days * 2,
+        rfm_df['recency'] <= recency_base_days * 3,
+        rfm_df['recency'] <= recency_base_days * 6
     ],
     [5, 4, 3, 2],
     default=1
@@ -537,9 +780,14 @@ segment_plot['percentage'] = (
     segment_plot['total_customers'].sum() * 100
 )
 
-# Highlight segmen Tidak Aktif
+# Highlight segmen dengan jumlah pelanggan tertinggi pada periode terpilih
+highest_segment = segment_plot.loc[
+    segment_plot['total_customers'].idxmax(),
+    'customer_segment'
+]
+
 colors = [
-    '#F4A261' if segment == 'Tidak Aktif' else '#A9B9C9'
+    '#F4A261' if segment == highest_segment else '#A9B9C9'
     for segment in segment_plot['customer_segment']
 ]
 
@@ -565,7 +813,11 @@ ax.bar_label(
     fontsize=9
 )
 
-ax.set_title("Distribusi Pelanggan Berdasarkan Segmen RFM")
+ax.set_title(
+    f"Distribusi Pelanggan Berdasarkan Segmen RFM "
+    f"({selected_start_date.strftime('%d %b %y')} - "
+    f"{selected_end_date.strftime('%d %b %y')})"
+)
 ax.set_xlabel("Jumlah Pelanggan")
 ax.set_ylabel("Segmen Pelanggan")
 ax.grid(axis='x', linestyle='--', alpha=0.5)
@@ -581,46 +833,76 @@ plt.tight_layout()
 st.pyplot(fig, width="content")
 st.markdown("#### Explanatory Analysis")
 
-st.markdown("""
-Berdasarkan hasil segmentasi RFM terhadap 93.096 pelanggan, diperoleh enam kelompok pelanggan dengan karakteristik perilaku transaksi yang berbeda.
+if rfm_df.empty or segment_summary.empty:
+    st.info(
+        "Tidak terdapat data pelanggan yang dapat disegmentasikan "
+        "pada periode dan pengaturan Recency yang dipilih."
+    )
+else:
+    total_rfm_customers = len(rfm_df)
+    segment_summary['percentage'] = (
+        segment_summary['total_customers'] / total_rfm_customers * 100
+    )
+
+    # Susun karakteristik seluruh segmen berdasarkan hasil perhitungan aktual.
+    segment_descriptions = []
+    for _, segment_row in segment_summary.iterrows():
+        segment_descriptions.append(
+            f"- **{segment_row['customer_segment']}**: "
+            f"{int(segment_row['total_customers']):,} pelanggan "
+            f"({segment_row['percentage']:.2f}%), dengan rata-rata "
+            f"Recency {segment_row['avg_recency']:.0f} hari, "
+            f"Frequency {segment_row['avg_frequency']:.2f} kali, "
+            f"dan Monetary R$ {segment_row['avg_monetary']:,.2f}."
+        )
+
+    largest_segment = segment_summary.iloc[0]
+    smallest_segment = segment_summary.sort_values(
+        'total_customers', ascending=True
+    ).iloc[0]
+
+    inactive_names = ['Tidak Aktif', 'Tidak Aktif - Bernilai Tinggi']
+    inactive_count = rfm_df[
+        rfm_df['customer_segment'].isin(inactive_names)
+    ].shape[0]
+    inactive_share = inactive_count / total_rfm_customers * 100
+
+    repeated_customers = int((rfm_df['frequency'] > 1).sum())
+    repeated_share = repeated_customers / total_rfm_customers * 100
+
+    st.markdown(
+        f"""
+Berdasarkan hasil segmentasi RFM pada periode
+**{selected_start_date.strftime('%d %b %y')} hingga
+{selected_end_date.strftime('%d %b %y')}**, terdapat
+**{total_rfm_customers:,} pelanggan** yang terbagi ke dalam
+{len(segment_summary)} kelompok.
 
 **Karakteristik Masing-Masing Segmen**
 
-1. **Tidak Aktif (36,06%)**
-
-   Merupakan kelompok pelanggan terbesar dengan 33.570 pelanggan. Rata-rata Recency mencapai 338 hari, Frequency sekitar 1,01 kali, dan Monetary sebesar R$ 56,08. Hal ini menunjukkan bahwa pelanggan dalam kelompok ini sudah cukup lama tidak melakukan transaksi, dengan frekuensi dan nilai pembelian yang relatif rendah.
-
-2. **Tidak Aktif - Bernilai Tinggi (22,89%)**
-
-   Terdiri dari 21.306 pelanggan dengan rata-rata Recency 335 hari, Frequency 1,06 kali, dan Monetary R$ 271,32. Meskipun sudah lama tidak melakukan transaksi, kelompok ini memiliki nilai pembelian rata-rata yang tinggi. Total nilai pembelian historisnya mencapai R$ 5.780.808,16.
-
-3. **Perlu Perhatian (15,92%)**
-
-   Terdiri dari 14.822 pelanggan dengan rata-rata Recency 122 hari, Frequency 1 kali, dan Monetary R$ 55,99. Kelompok ini belum melakukan pembelian berulang dan memiliki jarak waktu transaksi terakhir yang cukup panjang dibandingkan kelompok pelanggan yang lebih baru bertransaksi.
-
-4. **Bernilai Tinggi (15,85%)**
-
-   Terdiri dari 14.757 pelanggan dengan rata-rata Recency 93 hari, Frequency 1 kali, dan Monetary R$ 267,44. Kelompok ini memiliki nilai pembelian rata-rata yang tinggi, tetapi belum menunjukkan perilaku pembelian berulang.
-
-5. **Potensial (7,96%)**
-
-   Terdiri dari 7.408 pelanggan dengan rata-rata Recency sekitar 29 hari, Frequency 1 kali, dan Monetary R$ 55,10. Kelompok ini relatif baru melakukan transaksi, tetapi belum menunjukkan pembelian berulang.
-
-6. **Pembelian Ulang (1,32%)**
-
-   Merupakan kelompok pelanggan terkecil dengan 1.233 pelanggan. Rata-rata Recency sekitar 91 hari, Frequency 2,15 kali, dan Monetary R$ 268,89. Kelompok ini menunjukkan perilaku pembelian berulang dengan nilai pembelian rata-rata yang relatif tinggi.
+{chr(10).join(segment_descriptions)}
 
 **Temuan Utama**
 
-Dari hasil segmentasi tersebut, terdapat beberapa temuan penting:
+- Segmen dengan jumlah pelanggan terbanyak adalah
+  **{largest_segment['customer_segment']}**, sebanyak
+  **{int(largest_segment['total_customers']):,} pelanggan**
+  ({largest_segment['percentage']:.2f}%).
+- Segmen dengan jumlah pelanggan paling sedikit adalah
+  **{smallest_segment['customer_segment']}**, sebanyak
+  **{int(smallest_segment['total_customers']):,} pelanggan**
+  ({smallest_segment['percentage']:.2f}%).
+- Jika kedua kelompok Tidak Aktif digabungkan, jumlahnya mencapai
+  **{inactive_count:,} pelanggan** atau **{inactive_share:.2f}%**
+  dari seluruh pelanggan.
+- Pelanggan yang melakukan transaksi lebih dari satu kali berjumlah
+  **{repeated_customers:,} orang** ({repeated_share:.2f}%).
 
-- Segmen Tidak Aktif merupakan kelompok terbesar, mencakup 36,06% dari seluruh pelanggan.
-- Jika digabungkan dengan segmen Tidak Aktif - Bernilai Tinggi, kedua kelompok pelanggan tidak aktif mencakup sekitar 58,95% dari total pelanggan.
-- Segmen Tidak Aktif - Bernilai Tinggi memiliki total nilai pembelian historis terbesar di antara seluruh segmen, yaitu R$5.780.808,16.
-- Segmen Pembelian Ulang hanya mencakup 1,32% pelanggan, menunjukkan bahwa proporsi pelanggan yang melakukan transaksi berulang relatif kecil.
-
-Secara keseluruhan, hasil segmentasi menunjukkan bahwa sebagian besar pelanggan belum menunjukkan perilaku pembelian berulang. Selain itu, terdapat kelompok pelanggan yang sudah lama tidak bertransaksi tetapi memiliki nilai pembelian historis tinggi.
-""")
+Temuan tersebut menggambarkan komposisi pelanggan berdasarkan perilaku
+transaksi pada periode yang dipilih. Perubahan periode maupun batas
+Recency dapat mengubah distribusi setiap segmen.
+"""
+    )
 plt.close(fig)
 
 
@@ -657,7 +939,9 @@ wedges, texts, autotexts = ax.pie(
 )
 
 ax.set_title(
-    "Proporsi Pelanggan Berdasarkan Frekuensi Transaksi",
+    f"Proporsi Pelanggan Berdasarkan Frekuensi Transaksi "
+    f"({selected_start_date.strftime('%d %b %y')} - "
+    f"{selected_end_date.strftime('%d %b %y')})",
     fontweight='bold'
 )
 
@@ -665,17 +949,36 @@ plt.tight_layout()
 st.pyplot(fig, width="content")
 st.markdown("#### Explanatory Analysis")
 
-st.markdown("""
+if not rfm_df.empty:
+    one_time_customers = int((rfm_df['frequency'] == 1).sum())
+    repeat_customers = int((rfm_df['frequency'] > 1).sum())
+    one_time_pct = one_time_customers / len(rfm_df) * 100
+    repeat_pct = repeat_customers / len(rfm_df) * 100
+
+    dominant_frequency_group = (
+        "pelanggan yang hanya melakukan satu kali transaksi"
+        if one_time_customers >= repeat_customers
+        else "pelanggan yang melakukan transaksi lebih dari satu kali"
+    )
+
+    st.markdown(
+        f"""
 **Analisis Frekuensi Transaksi Pelanggan**
 
-Distribusi frekuensi transaksi menunjukkan bahwa mayoritas pelanggan hanya melakukan satu kali pembelian selama periode pengamatan.
+Pada periode **{selected_start_date.strftime('%d %b %y')} hingga
+{selected_end_date.strftime('%d %b %y')}**:
 
-- Sebanyak 90.307 pelanggan (97,00%) hanya melakukan satu kali transaksi.
-- Sebanyak 2.789 pelanggan (3,00%) melakukan pembelian lebih dari satu kali.
+- **{one_time_customers:,} pelanggan ({one_time_pct:.2f}%)**
+  melakukan satu kali transaksi.
+- **{repeat_customers:,} pelanggan ({repeat_pct:.2f}%)**
+  melakukan transaksi lebih dari satu kali.
 
-Temuan ini menunjukkan bahwa proporsi pelanggan yang melakukan pembelian berulang masih sangat kecil dibandingkan pelanggan yang hanya melakukan satu kali transaksi.
-
-Dengan demikian, perilaku pembelian berulang menjadi salah satu aspek penting yang perlu diperhatikan dalam analisis karakteristik pelanggan.
-""")
+Kelompok yang paling dominan adalah {dominant_frequency_group}.
+Informasi ini memberikan gambaran mengenai proporsi pelanggan yang
+melakukan pembelian berulang pada periode analisis.
+"""
+    )
+else:
+    st.info("Belum ada data frekuensi transaksi untuk periode yang dipilih.")
 plt.close(fig)
 
