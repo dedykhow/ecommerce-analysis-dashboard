@@ -84,7 +84,14 @@ except Exception as e:
 # ==========================================
 
 st.divider()
-st.header("1. Tren Penjualan Bulanan")
+
+st.header("Pertanyaan 1: Tren Penjualan")
+
+st.subheader("Bagaimana Perkembangan Tren Penjualan Bulanan?")
+
+st.markdown("""
+Visualisasi ini menampilkan perkembangan nilai penjualan bulanan selama Januari 2017 hingga Agustus 2018. Nilai penjualan dihitung berdasarkan total harga produk (`price`) dari pesanan berstatus delivered, tanpa memasukkan biaya pengiriman.
+""")
 
 # Mengubah kolom tanggal menjadi datetime
 orders_df['order_purchase_timestamp'] = pd.to_datetime(
@@ -169,6 +176,20 @@ ax.grid(axis='y', linestyle='--', alpha=0.5)
 
 plt.tight_layout()
 st.pyplot(fig, width="content")
+
+st.markdown("#### Explanatory Analysis")
+
+st.markdown("""
+Berdasarkan grafik, nilai penjualan menunjukkan kecenderungan meningkat selama periode Januari 2017 hingga Agustus 2018, meskipun terdapat beberapa fluktuasi bulanan.
+
+- Penjualan terendah terjadi pada Januari 2017 sebesar R$ 111.798,36.
+- Penjualan tertinggi terjadi pada November 2017 sebesar R$ 987.648,07.
+- Setelah mencapai puncak pada November 2017, penjualan mengalami penurunan pada Desember 2017, kemudian kembali meningkat pada awal 2018.
+- Pada periode Maret hingga Mei 2018, penjualan relatif stabil di kisaran R$950 ribu hingga R$ 980 ribu per bulan.
+
+Secara keseluruhan, nilai penjualan pada Agustus 2018 mencapai R$838.576,64 atau sekitar 7,5 kali dibandingkan Januari 2017. Hal ini menunjukkan perkembangan nilai penjualan yang positif selama periode analisis.
+""")
+
 plt.close(fig)
 
 
@@ -178,7 +199,14 @@ plt.close(fig)
 # ==========================================
 
 st.divider()
-st.header("2. Kontribusi Penjualan Berdasarkan Kategori Produk")
+
+st.header("Pertanyaan 2: Kategori Produk")
+
+st.subheader("Kategori Produk Apa yang Memberikan Kontribusi Nilai Penjualan Terbesar?")
+
+st.markdown("""
+Visualisasi ini menampilkan 10 kategori produk dengan nilai penjualan tertinggi selama Januari 2017 hingga Agustus 2018. Nilai penjualan dihitung berdasarkan total harga produk (`price`), tanpa memasukkan biaya pengiriman.
+""")
 
 # Mengambil pesanan dalam periode analisis
 orders_category = delivered_orders[
@@ -294,6 +322,20 @@ ax.set_xlim(
 
 plt.tight_layout()
 st.pyplot(fig, width="content")
+st.markdown("#### Explanatory Analysis")
+
+st.markdown("""
+Berdasarkan grafik, kategori `health_beauty` memberikan kontribusi nilai penjualan terbesar selama periode Januari 2017 hingga Agustus 2018.
+
+- Kategori `health_beauty` menempati posisi pertama dengan nilai penjualan sebesar R$ 1.229.557,50 atau sekitar 9,46% dari total penjualan kategori yang memiliki informasi kategori.
+- Posisi kedua ditempati `watches_gifts` dengan nilai penjualan R$ 1.163.187,91 atau sekitar 8,94%.
+- Posisi ketiga ditempati `bed_bath_table` dengan nilai penjualan R$ 1.022.955,77 atau sekitar 7,87%.
+- Menariknya, `bed_bath_table` memiliki jumlah item terjual terbanyak di antara 10 kategori teratas, yaitu 10.945 item, tetapi nilai penjualannya berada di posisi ketiga.
+
+Temuan ini menunjukkan bahwa kategori dengan jumlah item terjual terbanyak belum tentu menghasilkan nilai penjualan terbesar. Kontribusi nilai penjualan juga dipengaruhi oleh harga produk yang terjual.
+
+Perhitungan persentase menggunakan total penjualan dari item transaksi yang memiliki informasi kategori produk dalam bahasa Inggris. Sebanyak 1.557 item transaksi tidak disertakan dalam perhitungan kategori karena informasi kategori dalam bahasa Inggris tidak tersedia.
+""")
 plt.close(fig)
 
 
@@ -303,7 +345,14 @@ plt.close(fig)
 # ==========================================
 
 st.divider()
-st.header("3. Segmentasi Pelanggan (RFM)")
+
+st.header("Pertanyaan 3: Segmentasi Pelanggan")
+
+st.subheader("Bagaimana Karakteristik Pelanggan Berdasarkan Recency, Frequency, dan Monetary?")
+
+st.markdown("""
+Visualisasi ini menampilkan distribusi pelanggan berdasarkan hasil segmentasi RFM selama periode Januari 2017 hingga Agustus 2018. Segmentasi dilakukan menggunakan nilai Recency, Frequency, dan Monetary dari transaksi berstatus delivered.
+""")
 
 # Mengambil pesanan delivered pada periode analisis
 rfm_orders = delivered_orders[
@@ -530,6 +579,48 @@ ax.set_xlim(
 
 plt.tight_layout()
 st.pyplot(fig, width="content")
+st.markdown("#### Explanatory Analysis")
+
+st.markdown("""
+Berdasarkan hasil segmentasi RFM terhadap 93.096 pelanggan, diperoleh enam kelompok pelanggan dengan karakteristik perilaku transaksi yang berbeda.
+
+**Karakteristik Masing-Masing Segmen**
+
+1. **Tidak Aktif (36,06%)**
+
+   Merupakan kelompok pelanggan terbesar dengan 33.570 pelanggan. Rata-rata Recency mencapai 338 hari, Frequency sekitar 1,01 kali, dan Monetary sebesar R$ 56,08. Hal ini menunjukkan bahwa pelanggan dalam kelompok ini sudah cukup lama tidak melakukan transaksi, dengan frekuensi dan nilai pembelian yang relatif rendah.
+
+2. **Tidak Aktif - Bernilai Tinggi (22,89%)**
+
+   Terdiri dari 21.306 pelanggan dengan rata-rata Recency 335 hari, Frequency 1,06 kali, dan Monetary R$ 271,32. Meskipun sudah lama tidak melakukan transaksi, kelompok ini memiliki nilai pembelian rata-rata yang tinggi. Total nilai pembelian historisnya mencapai R$ 5.780.808,16.
+
+3. **Perlu Perhatian (15,92%)**
+
+   Terdiri dari 14.822 pelanggan dengan rata-rata Recency 122 hari, Frequency 1 kali, dan Monetary R$ 55,99. Kelompok ini belum melakukan pembelian berulang dan memiliki jarak waktu transaksi terakhir yang cukup panjang dibandingkan kelompok pelanggan yang lebih baru bertransaksi.
+
+4. **Bernilai Tinggi (15,85%)**
+
+   Terdiri dari 14.757 pelanggan dengan rata-rata Recency 93 hari, Frequency 1 kali, dan Monetary R$ 267,44. Kelompok ini memiliki nilai pembelian rata-rata yang tinggi, tetapi belum menunjukkan perilaku pembelian berulang.
+
+5. **Potensial (7,96%)**
+
+   Terdiri dari 7.408 pelanggan dengan rata-rata Recency sekitar 29 hari, Frequency 1 kali, dan Monetary R$ 55,10. Kelompok ini relatif baru melakukan transaksi, tetapi belum menunjukkan pembelian berulang.
+
+6. **Pembelian Ulang (1,32%)**
+
+   Merupakan kelompok pelanggan terkecil dengan 1.233 pelanggan. Rata-rata Recency sekitar 91 hari, Frequency 2,15 kali, dan Monetary R$ 268,89. Kelompok ini menunjukkan perilaku pembelian berulang dengan nilai pembelian rata-rata yang relatif tinggi.
+
+**Temuan Utama**
+
+Dari hasil segmentasi tersebut, terdapat beberapa temuan penting:
+
+- Segmen Tidak Aktif merupakan kelompok terbesar, mencakup 36,06% dari seluruh pelanggan.
+- Jika digabungkan dengan segmen Tidak Aktif - Bernilai Tinggi, kedua kelompok pelanggan tidak aktif mencakup sekitar 58,95% dari total pelanggan.
+- Segmen Tidak Aktif - Bernilai Tinggi memiliki total nilai pembelian historis terbesar di antara seluruh segmen, yaitu R$5.780.808,16.
+- Segmen Pembelian Ulang hanya mencakup 1,32% pelanggan, menunjukkan bahwa proporsi pelanggan yang melakukan transaksi berulang relatif kecil.
+
+Secara keseluruhan, hasil segmentasi menunjukkan bahwa sebagian besar pelanggan belum menunjukkan perilaku pembelian berulang. Selain itu, terdapat kelompok pelanggan yang sudah lama tidak bertransaksi tetapi memiliki nilai pembelian historis tinggi.
+""")
 plt.close(fig)
 
 
@@ -538,8 +629,7 @@ plt.close(fig)
 # 6. PROPORSI PELANGGAN BERDASARKAN FREKUENSI
 # ==========================================
 
-st.divider()
-st.header("4. Proporsi Pelanggan Berdasarkan Frekuensi Transaksi")
+st.subheader("Proporsi Pelanggan Berdasarkan Frekuensi Transaksi")
 
 # Menghitung jumlah pelanggan berdasarkan frekuensi transaksi
 frequency_distribution = pd.Series({
@@ -573,5 +663,19 @@ ax.set_title(
 
 plt.tight_layout()
 st.pyplot(fig, width="content")
+st.markdown("#### Explanatory Analysis")
+
+st.markdown("""
+**Analisis Frekuensi Transaksi Pelanggan**
+
+Distribusi frekuensi transaksi menunjukkan bahwa mayoritas pelanggan hanya melakukan satu kali pembelian selama periode pengamatan.
+
+- Sebanyak 90.307 pelanggan (97,00%) hanya melakukan satu kali transaksi.
+- Sebanyak 2.789 pelanggan (3,00%) melakukan pembelian lebih dari satu kali.
+
+Temuan ini menunjukkan bahwa proporsi pelanggan yang melakukan pembelian berulang masih sangat kecil dibandingkan pelanggan yang hanya melakukan satu kali transaksi.
+
+Dengan demikian, perilaku pembelian berulang menjadi salah satu aspek penting yang perlu diperhatikan dalam analisis karakteristik pelanggan.
+""")
 plt.close(fig)
 
